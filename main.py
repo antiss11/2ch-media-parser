@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-""" Functions for parsing, processing and downloading media content from 2ch.hk """
 
 import requests
 from bs4 import BeautifulSoup
@@ -61,12 +60,8 @@ class MainActions:
         handler = StatusHandler(label)
         links_dict = list(zip(links, names))
         set_folder(folder)
-        images_ready = 0
         for link, name in links_dict:
-            handler.message("{0}/{1}".format(images_ready, num_links))
-            download_image(link, name)
-            images_ready += 1
-
+            download_image(link, name, handler, num_links)
 
     @classmethod
     def parse_page_thread(cls, url, folder, content_type, label):
@@ -75,19 +70,32 @@ class MainActions:
 
 
 class StatusHandler:
+
+    images_downloaded = 0
+
     def __init__(self, label):
         self.label = label
+        self.lock = threading.Lock()
 
     def message(self, message):
-        self.label['text'] = message
+        self.lock.acquire()
+        try:
+            self.label['text'] = message
+        finally:
+            self.lock.release()
 
 
-def download_image(link, name):
-    """Funtions downloads images in binary mode"""
-    with open(name, 'wb') as handle:
-        responce = requests.get(link, stream=True)
-        for block in responce.iter_content():
-            handle.write(block)
+def download_image(link, name, status_handle, num_links):
+    """Function downloads images in binary mode"""
+    def download():
+        with open(name, 'wb') as handle:
+            responce = requests.get(link, stream=True)
+            for block in responce.iter_content():
+                handle.write(block)
+        StatusHandler.images_downloaded += 1
+        status_handle.message("{0}/{1}".format(StatusHandler.images_downloaded, num_links))
+
+    threading.Thread(target=download).start()
 
 
 def set_folder(path):
